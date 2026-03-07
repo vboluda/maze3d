@@ -114,6 +114,7 @@ export default function MazeWorld({
 
     const halfWorld = worldSize / 2;
     const eyeHeight = 0.5;
+    const playerHeight = eyeHeight;
     const moveSpeed = 5;
     const turnSpeed = 2.2;
     const borderPadding = 0.35;
@@ -243,8 +244,17 @@ export default function MazeWorld({
         const wallMaxX = mesh.position.x + halfSize + playerRadius;
         const wallMinZ = mesh.position.z - halfSize - playerRadius;
         const wallMaxZ = mesh.position.z + halfSize + playerRadius;
+        const wallBottomY = mesh.position.y - halfSize;
+        const wallTopY = mesh.position.y + halfSize;
+        const overlapsPlayerHeight = wallBottomY < playerHeight && wallTopY > 0;
 
-        return x >= wallMinX && x <= wallMaxX && z >= wallMinZ && z <= wallMaxZ;
+        return (
+          overlapsPlayerHeight &&
+          x >= wallMinX &&
+          x <= wallMaxX &&
+          z >= wallMinZ &&
+          z <= wallMaxZ
+        );
       });
     };
 
