@@ -1,29 +1,23 @@
 import {
   Children,
   isValidElement,
+  type ReactElement,
   type ReactNode,
   useEffect,
   useMemo,
   useRef,
 } from "react";
 import * as THREE from "three";
-
-type PlanePosition = {
-  x: number;
-  y: number;
-};
-
-type BoxProps = {
-  position: PlanePosition & {
-    z?: number;
-  };
-  size?: number;
-  color?: number;
-};
+import Box, { type BoxProps, type PlanePosition } from "./Box";
 
 type MazeWorldProps = {
   worldSize: number;
   startPosition: PlanePosition;
+  extrernalWall?: number;
+  lightIntensity?: {
+    hemisphere?: number;
+    directional?: number;
+  };
   children?: ReactNode;
 };
 
@@ -31,30 +25,79 @@ type BoxDefinition = Required<Pick<BoxProps, "size" | "color">> & {
   position: Required<BoxProps["position"]>;
 };
 
-export function Box(_props: BoxProps) {
-  return null;
-}
-
 const toWorldX = (worldSize: number, x: number) => -worldSize / 2 + x;
 const toWorldZ = (worldSize: number, y: number) => worldSize / 2 - y;
+const toTileCenterWorldX = (worldSize: number, x: number) => toWorldX(worldSize, x + 0.5);
+const toTileCenterWorldZ = (worldSize: number, y: number) => toWorldZ(worldSize, y + 0.5);
 const toBoxWorldX = (worldSize: number, x: number) => toWorldX(worldSize, x + 0.5);
 const toBoxWorldZ = (worldSize: number, y: number) => toWorldZ(worldSize, y + 0.5);
 const WALL_TEXTURE_PATH = "/Bricks038_2K-JPG_Color.jpg";
 
 const isBoxElement = (
   child: ReactNode
-): child is React.ReactElement<BoxProps, typeof Box> =>
+): child is ReactElement<BoxProps, typeof Box> =>
   isValidElement(child) && child.type === Box;
+
+const createExternalWallBoxes = (
+  worldSize: number,
+  extrernalWall: number
+): BoxDefinition[] => {
+  const wallHeight = Math.max(0, Math.floor(extrernalWall));
+
+  if (wallHeight === 0) {
+    return [];
+  }
+
+  const wallBoxes: BoxDefinition[] = [];
+
+  for (let z = 0; z < wallHeight; z += 1) {
+    for (let x = 0; x < worldSize; x += 1) {
+      wallBoxes.push({
+        position: { x, y: 0, z },
+        size: 1,
+        color: 0x8b1e3f,
+      });
+
+      if (worldSize > 1) {
+        wallBoxes.push({
+          position: { x, y: worldSize - 1, z },
+          size: 1,
+          color: 0x8b1e3f,
+        });
+      }
+    }
+
+    for (let y = 1; y < worldSize - 1; y += 1) {
+      wallBoxes.push({
+        position: { x: 0, y, z },
+        size: 1,
+        color: 0x8b1e3f,
+      });
+
+      if (worldSize > 1) {
+        wallBoxes.push({
+          position: { x: worldSize - 1, y, z },
+          size: 1,
+          color: 0x8b1e3f,
+        });
+      }
+    }
+  }
+
+  return wallBoxes;
+};
 
 export default function MazeWorld({
   worldSize,
   startPosition,
+  extrernalWall = 0,
+  lightIntensity,
   children,
 }: MazeWorldProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
   const boxes = useMemo<BoxDefinition[]>(() => {
-    return Children.toArray(children)
+    const childBoxes = Children.toArray(children)
       .filter(isBoxElement)
       .map((child) => ({
         position: {
@@ -65,7 +108,9 @@ export default function MazeWorld({
         size: child.props.size ?? 1,
         color: child.props.color ?? 0x8b1e3f,
       }));
-  }, [children]);
+
+    return [...createExternalWallBoxes(worldSize, extrernalWall), ...childBoxes];
+  }, [children, extrernalWall, worldSize]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -119,10 +164,12 @@ export default function MazeWorld({
     const turnSpeed = 2.2;
     const borderPadding = 0.35;
     const playerRadius = 0.25;
+    const hemisphereLightIntensity = lightIntensity?.hemisphere ?? 1.0;
+    const directionalLightIntensity = lightIntensity?.directional ?? 0.55;
     const min = -halfWorld + borderPadding;
     const max = halfWorld - borderPadding;
-    const startX = toWorldX(worldSize, startPosition.x);
-    const startZ = toWorldZ(worldSize, startPosition.y);
+    const startX = toTileCenterWorldX(worldSize, startPosition.x);
+    const startZ = toTileCenterWorldZ(worldSize, startPosition.y);
 
     const groundGeometry = new THREE.PlaneGeometry(
       worldSize,
@@ -144,10 +191,17 @@ export default function MazeWorld({
     grid.position.y = 0.01;
     scene.add(grid);
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+    const hemiLight = new THREE.HemisphereLight(
+      0xffffff,
+      0x444444,
+      hemisphereLightIntensity
+    );
     scene.add(hemiLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.55);
+    const dirLight = new THREE.DirectionalLight(
+      0xffffff,
+      directionalLightIntensity
+    );
     dirLight.position.set(10, 20, 8);
     scene.add(dirLight);
 
@@ -375,7 +429,15 @@ export default function MazeWorld({
         mount.removeChild(renderer.domElement);
       }
     };
-  }, [boxes, startPosition.x, startPosition.y, worldSize]);
+  }, [
+    boxes,
+    lightIntensity?.directional,
+    lightIntensity?.hemisphere,
+    startPosition.x,
+    startPosition.y,
+    extrernalWall,
+    worldSize,
+  ]);
 
   return (
     <div style={{ width: "100vw", height: "100vh", overflow: "hidden" }}>
@@ -399,7 +461,6 @@ export default function MazeWorld({
         <div>W/S: move forward / backward</div>
         <div>A/D: left / right</div>
         <div>Q/E: turn left / right</div>
-        <div>Las cajas actúan como paredes</div>
       </div>
     </div>
   );
