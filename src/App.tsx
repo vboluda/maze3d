@@ -1,5 +1,7 @@
 import MazeWorld from "./components/MazeWorld";
 import Box from "./components/Box";
+import WallH from "./components/WallH";
+import WallV from "./components/WallV";
 
 export default function App() {
   return (
@@ -13,38 +15,26 @@ export default function App() {
       <Box position={{ x: 10, y: 1 }} />
       <Box position={{ x: 10, y: 2 }} />
       <Box position={{ x: 10, y: 3 }} />
-      <Box position={{ x: 10, y: 3, z: 1 }} />
+      <WallH posx={3} posy={3} length={8} />
+      <WallH posx={3} posy={3} posz={1} length={5} />
+      <WallH posx={3} posy={4} posz={1} length={5} />
+      <WallH posx={3} posy={5} posz={1} length={5} />
+      <WallH posx={3} posy={5} length={5} />
 
-      <Box position={{ x: 13, y: 13 }} />
-      <Box position={{ x: 13, y: 14 }} />
-      <Box position={{ x: 13, y: 15 }} />
-      <Box position={{ x: 13, y: 16 }} />
-      <Box position={{ x: 13, y: 17 }} />
-      <Box position={{ x: 13, y: 18 }} />
-      <Box position={{ x: 15, y: 13 }} />
-      <Box position={{ x: 15, y: 14 }} />
-      <Box position={{ x: 15, y: 15 }} />
-      <Box position={{ x: 15, y: 16 }} />
-      <Box position={{ x: 15, y: 17 }} />
-      <Box position={{ x: 15, y: 18 }} />
-      <Box position={{ x: 13, y: 13,z:1 }} />
-      <Box position={{ x: 13, y: 14, z: 1 }} />
-      <Box position={{ x: 13, y: 15, z: 1 }} />
-      <Box position={{ x: 13, y: 16, z: 1 }} />
-      <Box position={{ x: 13, y: 17, z: 1 }} />
-      <Box position={{ x: 13, y: 18, z: 1 }} />
-      <Box position={{ x: 15, y: 13, z: 1 }} />
-      <Box position={{ x: 15, y: 14, z: 1 }} />
-      <Box position={{ x: 15, y: 15, z: 1 }} />
-      <Box position={{ x: 15, y: 16, z: 1 }} />
-      <Box position={{ x: 15, y: 17, z: 1 }} />
-      <Box position={{ x: 15, y: 18, z: 1 }} />
-      <Box position={{ x: 14, y: 13, z: 1 }} />a
-      <Box position={{ x: 14, y: 14, z: 1 }} />
-      <Box position={{ x: 14, y: 15, z: 1 }} />
-      <Box position={{ x: 14, y: 16, z: 1 }} />
-      <Box position={{ x: 14, y: 17, z: 1 }} />
-      <Box position={{ x: 14, y: 18, z: 1 }} />
+      <WallV posx={9} posy={4} length={7} />
+      <WallV posx={9} posy={3} posz={1} length={8} />
+      <WallV posx={8} posy={3} posz={1} length={8} />
+      <WallV posx={7} posy={6} posz={1} length={5} />
+      <WallV posx={7} posy={6} length={5} />
+
+      <WallH posx={1} posy={10} length={6} />
+
+      <WallV posx={9} posy={14} length={7} />
+      <WallV posx={9} posy={13} posz={1} length={8} />
+      <WallV posx={8} posy={13} posz={1} length={8} />
+      <WallV posx={7} posy={16} posz={1} length={5} />
+      <WallV posx={7} posy={16} length={5} />
+      
     </MazeWorld>
   );
 }

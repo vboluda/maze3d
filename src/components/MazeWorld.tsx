@@ -9,6 +9,8 @@ import {
 } from "react";
 import * as THREE from "three";
 import Box, { type BoxProps, type PlanePosition } from "./Box";
+import WallH, { type WallHProps } from "./WallH";
+import WallV, { type WallVProps } from "./WallV";
 
 type MazeWorldProps = {
   worldSize: number;
@@ -37,6 +39,26 @@ const isBoxElement = (
   child: ReactNode
 ): child is ReactElement<BoxProps, typeof Box> =>
   isValidElement(child) && child.type === Box;
+
+const isWallHElement = (
+  child: ReactNode
+): child is ReactElement<WallHProps, typeof WallH> =>
+  isValidElement(child) && child.type === WallH;
+
+const isWallVElement = (
+  child: ReactNode
+): child is ReactElement<WallVProps, typeof WallV> =>
+  isValidElement(child) && child.type === WallV;
+
+const createBoxDefinition = (
+  position: Required<BoxProps["position"]>,
+  size = 1,
+  color = 0x8b1e3f
+): BoxDefinition => ({
+  position,
+  size,
+  color,
+});
 
 const createExternalWallBoxes = (
   worldSize: number,
@@ -97,17 +119,61 @@ export default function MazeWorld({
   const mountRef = useRef<HTMLDivElement | null>(null);
 
   const boxes = useMemo<BoxDefinition[]>(() => {
-    const childBoxes = Children.toArray(children)
-      .filter(isBoxElement)
-      .map((child) => ({
-        position: {
-          x: child.props.position.x,
-          y: child.props.position.y,
-          z: child.props.position.z ?? 0,
-        },
-        size: child.props.size ?? 1,
-        color: child.props.color ?? 0x8b1e3f,
-      }));
+    const childBoxes = Children.toArray(children).flatMap((child) => {
+      if (isBoxElement(child)) {
+        return [
+          createBoxDefinition(
+            {
+              x: child.props.position.x,
+              y: child.props.position.y,
+              z: child.props.position.z ?? 0,
+            },
+            child.props.size ?? 1,
+            child.props.color ?? 0x8b1e3f
+          ),
+        ];
+      }
+
+      if (isWallHElement(child)) {
+        const wallLength = Math.max(0, Math.floor(child.props.length));
+        const z = child.props.posz ?? 0;
+        const size = child.props.size ?? 1;
+        const color = child.props.color ?? 0x8b1e3f;
+
+        return Array.from({ length: wallLength }, (_, index) =>
+          createBoxDefinition(
+            {
+              x: child.props.posx + index,
+              y: child.props.posy,
+              z,
+            },
+            size,
+            color
+          )
+        );
+      }
+
+      if (isWallVElement(child)) {
+        const wallLength = Math.max(0, Math.floor(child.props.length));
+        const z = child.props.posz ?? 0;
+        const size = child.props.size ?? 1;
+        const color = child.props.color ?? 0x8b1e3f;
+
+        return Array.from({ length: wallLength }, (_, index) =>
+          createBoxDefinition(
+            {
+              x: child.props.posx,
+              y: child.props.posy + index,
+              z,
+            },
+            size,
+            color
+          )
+        );
+      }
+
+      return [];
+    });
 
     return [...createExternalWallBoxes(worldSize, extrernalWall), ...childBoxes];
   }, [children, extrernalWall, worldSize]);
