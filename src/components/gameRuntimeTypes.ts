@@ -1,6 +1,8 @@
 import type * as THREE from "three";
 import type { CollisionSystem } from "./collisionSystem";
+import type { InputSystem } from "./inputSystem";
 import type { PlayerEntity } from "./mazeWorldEntities";
+import type { SceneRuntimeSystem } from "./sceneRuntimeSystem";
 import type {
   EnemyEntity,
   EnemyVisualRecord,
@@ -49,4 +51,19 @@ export type DynamicGameObject = {
   init: (context: RuntimeInitContext) => void;
   update: (frame: RuntimeFrameContext, input: RuntimeInputState) => void;
   dispose: (context: RuntimeDisposeContext) => void;
+};
+
+export type GameSystems = {
+  inputSystem: InputSystem;
+  collisionSystem: CollisionSystem;
+  sceneRuntimeSystem: SceneRuntimeSystem;
+  dynamicObjects: DynamicGameObject[];
+};
+
+export type GameSession = {
+  config: MazeWorldRuntimeConfig;
+  systems: GameSystems;
+  createInitContext: () => RuntimeInitContext;
+  createFrameContext: (dt: number) => RuntimeFrameContext;
+  createDisposeContext: () => RuntimeDisposeContext;
 };

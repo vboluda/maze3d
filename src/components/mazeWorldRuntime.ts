@@ -1,47 +1,12 @@
 import * as THREE from "three";
-import { createCollisionSystem } from "./collisionSystem";
-import { createDefaultDynamicGameObjects } from "./dynamicGameObjects";
+import { createGameSession } from "./gameSession";
 import type {
   DynamicGameObject,
-  RuntimeDisposeContext,
-  RuntimeInitContext,
+  GameSession,
   MazeWorldRuntimeConfig,
   RuntimeFrameContext,
   RuntimeInputState,
 } from "./gameRuntimeTypes";
-import { createInputSystem } from "./inputSystem";
-import { createSceneRuntimeSystem } from "./sceneRuntimeSystem";
-
-const createRuntimeInitContext = (
-  config: MazeWorldRuntimeConfig,
-  collisionSystem: ReturnType<typeof createCollisionSystem>
-): RuntimeInitContext => ({
-  ...config,
-  collisionSystem,
-});
-
-const createRuntimeDisposeContext = (
-  config: MazeWorldRuntimeConfig,
-  collisionSystem: ReturnType<typeof createCollisionSystem>
-): RuntimeDisposeContext => ({
-  ...config,
-  collisionSystem,
-});
-
-const createRuntimeFrameContext = (
-  config: MazeWorldRuntimeConfig,
-  dt: number,
-  collisionSystem: ReturnType<typeof createCollisionSystem>
-): RuntimeFrameContext => ({
-  player: config.player,
-  enemies: config.enemies,
-  enemyVisuals: config.enemyVisuals,
-  bounds: config.bounds,
-  worldSize: config.worldSize,
-  wallMeshes: config.wallMeshes,
-  dt,
-  collisionSystem,
-});
 
 const updateRuntimeFrame = (
   frame: RuntimeFrameContext,
@@ -53,82 +18,36 @@ const updateRuntimeFrame = (
   });
 };
 
-export const startMazeWorldRuntime = ({
-  mount,
-  scene,
-  camera,
-  renderer,
-  player,
-  enemies,
-  enemyVisuals,
-  bounds,
-  worldSize,
-  wallMeshes,
-}: MazeWorldRuntimeConfig) => {
-  const inputSystem = createInputSystem();
-  const collisionSystem = createCollisionSystem(wallMeshes);
-  const dynamicObjects = createDefaultDynamicGameObjects({ player });
-  const sceneRuntimeSystem = createSceneRuntimeSystem({
-    mount,
-    scene,
-    camera,
-    renderer,
-  });
+export const startMazeWorldRuntime = (
+  config: MazeWorldRuntimeConfig
+) => {
+  const session: GameSession = createGameSession(config);
   const clock = new THREE.Clock();
   let animationId = 0;
 
-  const initContext = createRuntimeInitContext(
-    {
-      mount,
-      scene,
-      camera,
-      renderer,
-      player,
-      enemies,
-      enemyVisuals,
-      bounds,
-      worldSize,
-      wallMeshes,
-    },
-    collisionSystem
-  );
+  const initContext = session.createInitContext();
 
-  dynamicObjects.forEach((dynamicObject) => {
+  session.systems.dynamicObjects.forEach((dynamicObject) => {
     dynamicObject.init(initContext);
   });
-  sceneRuntimeSystem.init(initContext);
+  session.systems.sceneRuntimeSystem.init(initContext);
 
   const onResize = () => {
-    sceneRuntimeSystem.resize();
+    session.systems.sceneRuntimeSystem.resize();
   };
 
   const animate = () => {
     animationId = requestAnimationFrame(animate);
     const dt = clock.getDelta();
-    const frame = createRuntimeFrameContext(
-      {
-        player,
-        enemies,
-        enemyVisuals,
-        bounds,
-        worldSize,
-        wallMeshes,
-        mount,
-        scene,
-        camera,
-        renderer,
-      },
-      dt,
-      collisionSystem
-    );
+    const frame = session.createFrameContext(dt);
 
     updateRuntimeFrame(
       frame,
-      inputSystem.state,
-      dynamicObjects
+      session.systems.inputSystem.state,
+      session.systems.dynamicObjects
     );
 
-    sceneRuntimeSystem.renderFrame(frame);
+    session.systems.sceneRuntimeSystem.renderFrame(frame);
   };
 
   window.addEventListener("resize", onResize);
@@ -137,28 +56,14 @@ export const startMazeWorldRuntime = ({
 
   return () => {
     cancelAnimationFrame(animationId);
-    const disposeContext = createRuntimeDisposeContext(
-      {
-        mount,
-        scene,
-        camera,
-        renderer,
-        player,
-        enemies,
-        enemyVisuals,
-        bounds,
-        worldSize,
-        wallMeshes,
-      },
-      collisionSystem
-    );
+    const disposeContext = session.createDisposeContext();
 
-    [...dynamicObjects].reverse().forEach((dynamicObject) => {
+    [...session.systems.dynamicObjects].reverse().forEach((dynamicObject) => {
       dynamicObject.dispose(disposeContext);
     });
-    sceneRuntimeSystem.dispose(disposeContext);
+    session.systems.sceneRuntimeSystem.dispose(disposeContext);
 
-    inputSystem.dispose();
+    session.systems.inputSystem.dispose();
     window.removeEventListener("resize", onResize);
   };
 };
