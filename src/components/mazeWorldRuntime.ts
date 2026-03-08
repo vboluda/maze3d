@@ -1,11 +1,17 @@
 import * as THREE from "three";
 import { syncCameraToEntity } from "./mazeWorldEntities";
+import { updateEnemies } from "./mazeWorldEnemies";
 import {
   createPlayerMovementScratch,
   updatePlayer,
 } from "./mazeWorldPlayer";
 import type { PlayerEntity } from "./mazeWorldEntities";
-import type { WallMeshRecord, WorldBounds } from "./mazeWorldTypes";
+import type {
+  EnemyEntity,
+  EnemyVisualRecord,
+  WallMeshRecord,
+  WorldBounds,
+} from "./mazeWorldTypes";
 
 const CONTROL_KEYS = new Set(["w", "a", "s", "d", "q", "e"]);
 
@@ -15,7 +21,10 @@ type MazeWorldRuntimeParams = {
   camera: THREE.PerspectiveCamera;
   renderer: THREE.WebGLRenderer;
   player: PlayerEntity;
+  enemies: EnemyEntity[];
+  enemyVisuals: EnemyVisualRecord[];
   bounds: WorldBounds;
+  worldSize: number;
   wallMeshes: WallMeshRecord[];
 };
 
@@ -25,7 +34,10 @@ export const startMazeWorldRuntime = ({
   camera,
   renderer,
   player,
+  enemies,
+  enemyVisuals,
   bounds,
+  worldSize,
   wallMeshes,
 }: MazeWorldRuntimeParams) => {
   syncCameraToEntity(camera, player);
@@ -64,6 +76,16 @@ export const startMazeWorldRuntime = ({
       bounds,
       wallMeshes,
       scratch,
+    });
+
+    updateEnemies({
+      enemies,
+      enemyVisuals,
+      player,
+      dt,
+      bounds,
+      worldSize,
+      wallMeshes,
     });
 
     syncCameraToEntity(camera, player);

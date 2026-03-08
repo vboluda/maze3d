@@ -14,6 +14,22 @@ export const toBoxWorldX = (worldSize: number, x: number) =>
 export const toBoxWorldZ = (worldSize: number, y: number) =>
   toWorldZ(worldSize, y + 0.5);
 
+export const toTileX = (worldSize: number, worldX: number) =>
+  Math.floor(worldX + worldSize / 2);
+
+export const toTileY = (worldSize: number, worldZ: number) =>
+  Math.floor(worldSize / 2 - worldZ);
+
+export const isNear = (value: number, target: number, epsilon = 0.08) =>
+  Math.abs(value - target) <= epsilon;
+
+export const manhattanDistance = (
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number
+) => Math.abs(toX - fromX) + Math.abs(toY - fromY);
+
 export const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 

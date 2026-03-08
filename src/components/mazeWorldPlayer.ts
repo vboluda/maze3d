@@ -68,8 +68,8 @@ export const updatePlayer = ({
       !collidesWithWall({
         x: nextX,
         z: player.z,
-        playerHeight: player.height,
-        playerRadius: player.radius,
+        height: player.height,
+        radius: player.radius,
         wallMeshes,
       })
     ) {
@@ -81,8 +81,8 @@ export const updatePlayer = ({
       !collidesWithWall({
         x: player.x,
         z: nextZ,
-        playerHeight: player.height,
-        playerRadius: player.radius,
+        height: player.height,
+        radius: player.radius,
         wallMeshes,
       })
     ) {

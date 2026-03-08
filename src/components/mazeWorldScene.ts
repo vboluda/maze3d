@@ -2,9 +2,13 @@ import * as THREE from "three";
 import { toBoxWorldX, toBoxWorldZ } from "./mazeWorldMath";
 import type {
   BoxDefinition,
+  EnemyBehavior,
+  EnemyEntity,
+  EnemyVisualSet,
   MazeWorldLightIntensity,
   WallMeshRecord,
 } from "./mazeWorldTypes";
+import { syncEnemyMeshToEntity } from "./mazeWorldEntities";
 
 const WALL_TEXTURE_PATH = "/Bricks038_2K-JPG_Color.jpg";
 
@@ -211,4 +215,63 @@ export const disposeWallMeshes = (wallMeshes: WallMeshRecord[]) => {
     }
     textures.forEach((texture) => texture.dispose());
   });
+};
+
+const ENEMY_COLORS: Record<EnemyBehavior, number> = {
+  chase: 0xd9485f,
+  patrol: 0xe6a23c,
+  wander: 0x4aa3df,
+};
+
+export const createEnemyVisuals = (
+  enemies: EnemyEntity[],
+  scene: THREE.Scene
+): EnemyVisualSet => {
+  const geometry = new THREE.SphereGeometry(0.5, 16, 12);
+  const materials: EnemyVisualSet["materials"] = {
+    chase: new THREE.MeshStandardMaterial({
+      color: ENEMY_COLORS.chase,
+      roughness: 0.85,
+      metalness: 0.05,
+    }),
+    patrol: new THREE.MeshStandardMaterial({
+      color: ENEMY_COLORS.patrol,
+      roughness: 0.85,
+      metalness: 0.05,
+    }),
+    wander: new THREE.MeshStandardMaterial({
+      color: ENEMY_COLORS.wander,
+      roughness: 0.85,
+      metalness: 0.05,
+    }),
+  };
+
+  const records = enemies.map((enemy) => {
+    const mesh = new THREE.Mesh(geometry, materials[enemy.behavior]);
+    syncEnemyMeshToEntity(mesh, enemy);
+    scene.add(mesh);
+
+    return {
+      enemyId: enemy.id,
+      mesh,
+    };
+  });
+
+  return {
+    records,
+    geometry,
+    materials,
+  };
+};
+
+export const disposeEnemyVisuals = (
+  enemyVisuals: EnemyVisualSet,
+  scene: THREE.Scene
+) => {
+  enemyVisuals.records.forEach(({ mesh }) => {
+    scene.remove(mesh);
+  });
+
+  enemyVisuals.geometry.dispose();
+  Object.values(enemyVisuals.materials).forEach((material) => material.dispose());
 };

@@ -1,8 +1,13 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import Box, { type BoxProps } from "./Box";
+import Enemy, { type EnemyProps } from "./Enemy";
 import WallH, { type WallHProps } from "./WallH";
 import WallV, { type WallVProps } from "./WallV";
-import type { BoxDefinition } from "./mazeWorldTypes";
+import type {
+  BoxDefinition,
+  EnemyDefinition,
+  WorldLayoutDefinition,
+} from "./mazeWorldTypes";
 
 const isBoxElement = (
   child: ReactNode
@@ -19,6 +24,11 @@ const isWallVElement = (
 ): child is ReactElement<WallVProps, typeof WallV> =>
   isValidElement(child) && child.type === WallV;
 
+const isEnemyElement = (
+  child: ReactNode
+): child is ReactElement<EnemyProps, typeof Enemy> =>
+  isValidElement(child) && child.type === Enemy;
+
 const createBoxDefinition = (
   position: Required<BoxProps["position"]>,
   size = 1,
@@ -28,6 +38,31 @@ const createBoxDefinition = (
   size,
   color,
 });
+
+const createEnemyDefinition = (
+  props: EnemyProps
+): EnemyDefinition => {
+  const size = props.size ?? 0.6;
+  const height = props.height ?? 0.7;
+
+  return {
+    id: props.id,
+    behavior: props.behavior,
+    position: {
+      x: props.position.x,
+      y: props.position.y,
+      z: props.position.z ?? 0,
+    },
+    size,
+    height,
+    radius: props.radius ?? size * 0.35,
+    speed: props.speed ?? 1.5,
+    patrolAxis: props.patrolAxis ?? "x",
+    patrolDirection: props.patrolDirection ?? 1,
+    decisionInterval: props.decisionInterval ?? 1.25,
+    retargetInterval: props.retargetInterval ?? 0.5,
+  };
+};
 
 const createExternalWallBoxes = (
   worldSize: number,
@@ -78,14 +113,17 @@ const createExternalWallBoxes = (
   return wallBoxes;
 };
 
-export const buildWorldBoxes = (
+export const buildWorldLayout = (
   children: ReactNode,
   worldSize: number,
   extrernalWall: number
-): BoxDefinition[] => {
-  const childBoxes = Children.toArray(children).flatMap((child) => {
+): WorldLayoutDefinition => {
+  const childBoxes: BoxDefinition[] = [];
+  const enemies: EnemyDefinition[] = [];
+
+  Children.toArray(children).forEach((child) => {
     if (isBoxElement(child)) {
-      return [
+      childBoxes.push(
         createBoxDefinition(
           {
             x: child.props.position.x,
@@ -95,7 +133,9 @@ export const buildWorldBoxes = (
           child.props.size ?? 1,
           child.props.color ?? 0x8b1e3f
         ),
-      ];
+      );
+
+      return;
     }
 
     if (isWallHElement(child)) {
@@ -104,8 +144,9 @@ export const buildWorldBoxes = (
       const size = child.props.size ?? 1;
       const color = child.props.color ?? 0x8b1e3f;
 
-      return Array.from({ length: wallLength }, (_, index) =>
-        createBoxDefinition(
+      for (let index = 0; index < wallLength; index += 1) {
+        childBoxes.push(
+          createBoxDefinition(
           {
             x: child.props.posx + index,
             y: child.props.posy,
@@ -113,8 +154,11 @@ export const buildWorldBoxes = (
           },
           size,
           color
-        )
-      );
+          )
+        );
+      }
+
+      return;
     }
 
     if (isWallVElement(child)) {
@@ -123,8 +167,9 @@ export const buildWorldBoxes = (
       const size = child.props.size ?? 1;
       const color = child.props.color ?? 0x8b1e3f;
 
-      return Array.from({ length: wallLength }, (_, index) =>
-        createBoxDefinition(
+      for (let index = 0; index < wallLength; index += 1) {
+        childBoxes.push(
+          createBoxDefinition(
           {
             x: child.props.posx,
             y: child.props.posy + index,
@@ -132,12 +177,27 @@ export const buildWorldBoxes = (
           },
           size,
           color
-        )
-      );
+          )
+        );
+      }
+
+      return;
     }
 
-    return [];
+    if (isEnemyElement(child)) {
+      enemies.push(createEnemyDefinition(child.props));
+    }
   });
 
-  return [...createExternalWallBoxes(worldSize, extrernalWall), ...childBoxes];
+  return {
+    boxes: [...createExternalWallBoxes(worldSize, extrernalWall), ...childBoxes],
+    enemies,
+  };
 };
+
+export const buildWorldBoxes = (
+  children: ReactNode,
+  worldSize: number,
+  extrernalWall: number
+): BoxDefinition[] =>
+  buildWorldLayout(children, worldSize, extrernalWall).boxes;

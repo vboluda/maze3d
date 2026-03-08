@@ -9,17 +9,20 @@ import {
   toTileCenterWorldZ,
 } from "./mazeWorldMath";
 import type { PlayerEntity } from "./mazeWorldEntities";
-import { buildWorldBoxes } from "./mazeWorldLayout";
+import { buildWorldLayout } from "./mazeWorldLayout";
 import type { MazeWorldProps } from "./mazeWorldTypes";
 import { createPlayerState } from "./mazeWorldPlayer";
+import { createEnemyEntities } from "./mazeWorldEntities";
 import { startMazeWorldRuntime } from "./mazeWorldRuntime";
 import {
   createCamera,
+  createEnemyVisuals,
   createGrid,
   createGround,
   createLights,
   createRenderer,
   createScene,
+  disposeEnemyVisuals,
   createWallMeshes,
   createWallTexture,
   disposeGrid,
@@ -35,8 +38,8 @@ export default function MazeWorld({
 }: MazeWorldProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
-  const boxes = useMemo(
-    () => buildWorldBoxes(children, worldSize, extrernalWall),
+  const { boxes, enemies } = useMemo(
+    () => buildWorldLayout(children, worldSize, extrernalWall),
     [children, extrernalWall, worldSize]
   );
 
@@ -77,6 +80,14 @@ export default function MazeWorld({
       wallTexture
     );
 
+    const enemyEntities = createEnemyEntities(enemies, worldSize, {
+      halfWorld,
+      min,
+      max,
+    });
+
+    const enemyVisuals = createEnemyVisuals(enemyEntities, scene);
+
     const player: PlayerEntity = createPlayerState({
       startX,
       startZ,
@@ -93,7 +104,10 @@ export default function MazeWorld({
       camera,
       renderer,
       player,
+      enemies: enemyEntities,
+      enemyVisuals: enemyVisuals.records,
       bounds: { halfWorld, min, max },
+      worldSize,
       wallMeshes,
     });
 
@@ -104,6 +118,7 @@ export default function MazeWorld({
 
       groundGeometry.dispose();
       groundMaterial.dispose();
+      disposeEnemyVisuals(enemyVisuals, scene);
       disposeWallMeshes(wallMeshes);
       wallTexture.dispose();
       renderer.dispose();
@@ -118,6 +133,7 @@ export default function MazeWorld({
     lightIntensity?.hemisphere,
     startPosition.x,
     startPosition.y,
+    enemies,
     extrernalWall,
     worldSize,
   ]);
