@@ -10,6 +10,7 @@ import {
 } from "./mazeWorldMath";
 import type {
   EnemyEntity,
+  GridPosition,
   GridDirection,
   WorldBounds,
 } from "./mazeWorldTypes";
@@ -24,11 +25,38 @@ const CARDINAL_DIRECTIONS: GridDirection[] = [
 
 const ENEMY_TILE_EPSILON = 0.09;
 
+type EnemyNavigationContext = {
+  enemy: EnemyEntity;
+  player: PlayerEntity;
+  worldSize: number;
+  collisionSystem: CollisionSystem;
+};
+
+type EnemyTileNavigationContext = Omit<EnemyNavigationContext, "player"> & {
+  tile: GridPosition;
+};
+
+type EnemyMovementContext = {
+  enemy: EnemyEntity;
+  dt: number;
+  bounds: WorldBounds;
+  collisionSystem: CollisionSystem;
+};
+
 const direction = (x: -1 | 0 | 1, y: -1 | 0 | 1): GridDirection => ({ x, y });
 
+const getEnemyTile = (
+  enemy: EnemyEntity,
+  worldSize: number
+): GridPosition => ({
+  x: toTileX(worldSize, enemy.x),
+  y: toTileY(worldSize, enemy.z),
+});
+
 const isAtTileCenter = (enemy: EnemyEntity, worldSize: number) => {
-  const centerX = toTileCenterWorldX(worldSize, toTileX(worldSize, enemy.x));
-  const centerZ = toTileCenterWorldZ(worldSize, toTileY(worldSize, enemy.z));
+  const tile = getEnemyTile(enemy, worldSize);
+  const centerX = toTileCenterWorldX(worldSize, tile.x);
+  const centerZ = toTileCenterWorldZ(worldSize, tile.y);
 
   return (
     isNear(enemy.x, centerX, ENEMY_TILE_EPSILON) &&
@@ -44,19 +72,17 @@ const isZeroDirection = (direction: GridDirection) =>
 
 const canOccupyTile = ({
   enemy,
-  tileX,
-  tileY,
+  tile,
   worldSize,
   collisionSystem,
 }: {
   enemy: EnemyEntity;
-  tileX: number;
-  tileY: number;
+  tile: GridPosition;
   worldSize: number;
   collisionSystem: CollisionSystem;
 }) => {
-  const x = toTileCenterWorldX(worldSize, tileX);
-  const z = toTileCenterWorldZ(worldSize, tileY);
+  const x = toTileCenterWorldX(worldSize, tile.x);
+  const z = toTileCenterWorldZ(worldSize, tile.y);
 
   return !collisionSystem.collidesWithWalls({
     x,
@@ -68,22 +94,17 @@ const canOccupyTile = ({
 
 const getAvailableDirections = ({
   enemy,
-  tileX,
-  tileY,
+  tile,
   worldSize,
   collisionSystem,
-}: {
-  enemy: EnemyEntity;
-  tileX: number;
-  tileY: number;
-  worldSize: number;
-  collisionSystem: CollisionSystem;
-}) =>
+}: EnemyTileNavigationContext) =>
   CARDINAL_DIRECTIONS.filter((direction) =>
     canOccupyTile({
       enemy,
-      tileX: tileX + direction.x,
-      tileY: tileY + direction.y,
+      tile: {
+        x: tile.x + direction.x,
+        y: tile.y + direction.y,
+      },
       worldSize,
       collisionSystem,
     })
@@ -91,8 +112,7 @@ const getAvailableDirections = ({
 
 const choosePatrolDirection = (
   enemy: EnemyEntity,
-  tileX: number,
-  tileY: number,
+  tile: GridPosition,
   worldSize: number,
   collisionSystem: CollisionSystem
 ) => {
@@ -103,8 +123,10 @@ const choosePatrolDirection = (
   if (
     canOccupyTile({
       enemy,
-      tileX: tileX + forward.x,
-      tileY: tileY + forward.y,
+      tile: {
+        x: tile.x + forward.x,
+        y: tile.y + forward.y,
+      },
       worldSize,
       collisionSystem,
     })
@@ -122,8 +144,7 @@ const choosePatrolDirection = (
 const chooseChaseDirection = (
   enemy: EnemyEntity,
   player: PlayerEntity,
-  tileX: number,
-  tileY: number,
+  tile: GridPosition,
   worldSize: number,
   collisionSystem: CollisionSystem
 ) => {
@@ -131,8 +152,7 @@ const chooseChaseDirection = (
   const playerTileY = toTileY(worldSize, player.z);
   const availableDirections = getAvailableDirections({
     enemy,
-    tileX,
-    tileY,
+    tile,
     worldSize,
     collisionSystem,
   });
@@ -144,14 +164,14 @@ const chooseChaseDirection = (
 
   return pool.reduce<GridDirection>((bestDirection, direction) => {
     const bestDistance = manhattanDistance(
-      tileX + bestDirection.x,
-      tileY + bestDirection.y,
+      tile.x + bestDirection.x,
+      tile.y + bestDirection.y,
       playerTileX,
       playerTileY
     );
     const nextDistance = manhattanDistance(
-      tileX + direction.x,
-      tileY + direction.y,
+      tile.x + direction.x,
+      tile.y + direction.y,
       playerTileX,
       playerTileY
     );
@@ -162,15 +182,13 @@ const chooseChaseDirection = (
 
 const chooseWanderDirection = (
   enemy: EnemyEntity,
-  tileX: number,
-  tileY: number,
+  tile: GridPosition,
   worldSize: number,
   collisionSystem: CollisionSystem
 ) => {
   const availableDirections = getAvailableDirections({
     enemy,
-    tileX,
-    tileY,
+    tile,
     worldSize,
     collisionSystem,
   });
@@ -203,24 +221,18 @@ const chooseEnemyDirection = ({
   player,
   worldSize,
   collisionSystem,
-}: {
-  enemy: EnemyEntity;
-  player: PlayerEntity;
-  worldSize: number;
-  collisionSystem: CollisionSystem;
-}) => {
-  const tileX = toTileX(worldSize, enemy.x);
-  const tileY = toTileY(worldSize, enemy.z);
+}: EnemyNavigationContext) => {
+  const tile = getEnemyTile(enemy, worldSize);
 
   if (enemy.behavior === "patrol") {
-    return choosePatrolDirection(enemy, tileX, tileY, worldSize, collisionSystem);
+    return choosePatrolDirection(enemy, tile, worldSize, collisionSystem);
   }
 
   if (enemy.behavior === "chase") {
-    return chooseChaseDirection(enemy, player, tileX, tileY, worldSize, collisionSystem);
+    return chooseChaseDirection(enemy, player, tile, worldSize, collisionSystem);
   }
 
-  return chooseWanderDirection(enemy, tileX, tileY, worldSize, collisionSystem);
+  return chooseWanderDirection(enemy, tile, worldSize, collisionSystem);
 };
 
 const shouldReevaluateDirection = (
@@ -243,52 +255,68 @@ const shouldReevaluateDirection = (
   return enemy.nextDecisionIn <= 0;
 };
 
+const resetEnemyDecisionTimer = (enemy: EnemyEntity) => {
+  enemy.nextDecisionIn =
+    enemy.behavior === "chase" ? enemy.retargetInterval : enemy.decisionInterval;
+};
+
+const tryMoveEnemyAxis = ({
+  enemy,
+  nextX,
+  nextZ,
+  collisionSystem,
+}: {
+  enemy: EnemyEntity;
+  nextX: number;
+  nextZ: number;
+  collisionSystem: CollisionSystem;
+}) => {
+  if (
+    collisionSystem.collidesWithWalls({
+      x: nextX,
+      z: nextZ,
+      radius: enemy.radius,
+      height: enemy.height,
+    })
+  ) {
+    return false;
+  }
+
+  enemy.x = nextX;
+  enemy.z = nextZ;
+
+  return true;
+};
+
 const moveEnemy = ({
   enemy,
   dt,
   bounds,
   collisionSystem,
-}: {
-  enemy: EnemyEntity;
-  dt: number;
-  bounds: WorldBounds;
-  collisionSystem: CollisionSystem;
-}) => {
+}: EnemyMovementContext) => {
   const stepX = enemy.direction.x * enemy.speed * dt;
   const stepZ = -enemy.direction.y * enemy.speed * dt;
 
   let blocked = false;
 
   if (stepX !== 0) {
-    const nextX = enemy.x + stepX;
-
-    if (
-      !collisionSystem.collidesWithWalls({
-        x: nextX,
-        z: enemy.z,
-        radius: enemy.radius,
-        height: enemy.height,
-      })
-    ) {
-      enemy.x = nextX;
-    } else {
+    if (!tryMoveEnemyAxis({
+      enemy,
+      nextX: enemy.x + stepX,
+      nextZ: enemy.z,
+      collisionSystem,
+    })) {
       blocked = true;
     }
   }
 
   if (stepZ !== 0) {
-    const nextZ = enemy.z + stepZ;
-
-    if (
-      !collisionSystem.collidesWithWalls({
-        x: enemy.x,
-        z: nextZ,
-        radius: enemy.radius,
-        height: enemy.height,
-      })
-    ) {
-      enemy.z = nextZ;
-    } else {
+    if (!tryMoveEnemyAxis({
+      enemy,
+      nextX: enemy.x,
+      nextZ: enemy.z + stepZ,
+      collisionSystem,
+    })) {
       blocked = true;
     }
   }
@@ -296,6 +324,56 @@ const moveEnemy = ({
   clampEntityToBounds(enemy, bounds);
 
   return blocked;
+};
+
+const updateEnemy = (
+  enemy: EnemyEntity,
+  context: Omit<EnemyNavigationContext, "enemy"> & {
+    dt: number;
+    bounds: WorldBounds;
+  }
+) => {
+  enemy.nextDecisionIn -= context.dt;
+
+  if (shouldReevaluateDirection(enemy, context.worldSize, false)) {
+    enemy.direction = chooseEnemyDirection({
+      enemy,
+      player: context.player,
+      worldSize: context.worldSize,
+      collisionSystem: context.collisionSystem,
+    });
+    resetEnemyDecisionTimer(enemy);
+  }
+
+  const blocked = moveEnemy({
+    enemy,
+    dt: context.dt,
+    bounds: context.bounds,
+    collisionSystem: context.collisionSystem,
+  });
+
+  if (blocked) {
+    enemy.direction = chooseEnemyDirection({
+      enemy,
+      player: context.player,
+      worldSize: context.worldSize,
+      collisionSystem: context.collisionSystem,
+    });
+    enemy.nextDecisionIn = 0;
+  }
+
+  if (!isZeroDirection(enemy.direction)) {
+    enemy.yaw = Math.atan2(-enemy.direction.x, enemy.direction.y);
+  }
+
+  return context.collisionSystem.collidesEntityWithPlayer({
+    entityX: enemy.x,
+    entityZ: enemy.z,
+    entityRadius: enemy.radius,
+    playerX: context.player.x,
+    playerZ: context.player.z,
+    playerRadius: context.player.radius,
+  });
 };
 
 export const updateEnemies = ({
@@ -313,48 +391,13 @@ export const updateEnemies = ({
   worldSize: number;
   collisionSystem: CollisionSystem;
 }) => {
-  return enemies.some((enemy) => {
-    enemy.nextDecisionIn -= dt;
-
-    if (shouldReevaluateDirection(enemy, worldSize, false)) {
-      enemy.direction = chooseEnemyDirection({
-        enemy,
-        player,
-        worldSize,
-        collisionSystem,
-      });
-      enemy.nextDecisionIn =
-        enemy.behavior === "chase" ? enemy.retargetInterval : enemy.decisionInterval;
-    }
-
-    const blocked = moveEnemy({
-      enemy,
+  return enemies.some((enemy) =>
+    updateEnemy(enemy, {
+      player,
       dt,
       bounds,
+      worldSize,
       collisionSystem,
-    });
-
-    if (blocked) {
-      enemy.direction = chooseEnemyDirection({
-        enemy,
-        player,
-        worldSize,
-        collisionSystem,
-      });
-      enemy.nextDecisionIn = 0;
-    }
-
-    if (!isZeroDirection(enemy.direction)) {
-      enemy.yaw = Math.atan2(-enemy.direction.x, enemy.direction.y);
-    }
-
-    return collisionSystem.collidesEntityWithPlayer({
-      entityX: enemy.x,
-      entityZ: enemy.z,
-      entityRadius: enemy.radius,
-      playerX: player.x,
-      playerZ: player.z,
-      playerRadius: player.radius,
-    });
-  });
+    })
+  );
 };
