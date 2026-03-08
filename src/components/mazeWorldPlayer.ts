@@ -1,9 +1,9 @@
 import * as THREE from "three";
-import { collidesWithWall } from "./mazeWorldCollisions";
+import type { CollisionSystem } from "./collisionSystem";
 import { clamp } from "./mazeWorldMath";
 import { clampEntityToBounds, createPlayerEntity } from "./mazeWorldEntities";
 import type { PlayerEntity } from "./mazeWorldEntities";
-import type { WallMeshRecord, WorldBounds } from "./mazeWorldTypes";
+import type { WorldBounds } from "./mazeWorldTypes";
 
 export type PlayerMovementScratch = {
   forward: THREE.Vector3;
@@ -26,7 +26,7 @@ type UpdatePlayerParams = {
   pressed: Set<string>;
   dt: number;
   bounds: WorldBounds;
-  wallMeshes: WallMeshRecord[];
+  collisionSystem: CollisionSystem;
   scratch: PlayerMovementScratch;
 };
 
@@ -44,7 +44,7 @@ export const updatePlayer = ({
   pressed,
   dt,
   bounds,
-  wallMeshes,
+  collisionSystem,
   scratch,
 }: UpdatePlayerParams) => {
   if (pressed.has("q")) player.yaw += player.turnSpeed * dt;
@@ -65,12 +65,11 @@ export const updatePlayer = ({
 
     const nextX = clamp(player.x + scratch.movement.x, bounds.min, bounds.max);
     if (
-      !collidesWithWall({
+      !collisionSystem.collidesWithWalls({
         x: nextX,
         z: player.z,
         height: player.height,
         radius: player.radius,
-        wallMeshes,
       })
     ) {
       player.x = nextX;
@@ -78,12 +77,11 @@ export const updatePlayer = ({
 
     const nextZ = clamp(player.z + scratch.movement.z, bounds.min, bounds.max);
     if (
-      !collidesWithWall({
+      !collisionSystem.collidesWithWalls({
         x: player.x,
         z: nextZ,
         height: player.height,
         radius: player.radius,
-        wallMeshes,
       })
     ) {
       player.z = nextZ;

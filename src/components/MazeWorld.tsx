@@ -14,20 +14,7 @@ import type { MazeWorldProps } from "./mazeWorldTypes";
 import { createPlayerState } from "./mazeWorldPlayer";
 import { createEnemyEntities } from "./mazeWorldEntities";
 import { startMazeWorldRuntime } from "./mazeWorldRuntime";
-import {
-  createCamera,
-  createEnemyVisuals,
-  createGrid,
-  createGround,
-  createLights,
-  createRenderer,
-  createScene,
-  disposeEnemyVisuals,
-  createWallMeshes,
-  createWallTexture,
-  disposeGrid,
-  disposeWallMeshes,
-} from "./mazeWorldScene";
+import { createSceneSystem } from "./sceneSystem";
 
 export default function MazeWorld({
   worldSize,
@@ -47,11 +34,6 @@ export default function MazeWorld({
     const mount = mountRef.current;
     if (!mount) return;
 
-    const scene = createScene();
-    const camera = createCamera(mount);
-    const renderer = createRenderer(mount);
-    const wallTexture = createWallTexture(renderer);
-
     const eyeHeight = 0.5;
     const moveSpeed = 5;
     const turnSpeed = 2.2;
@@ -61,32 +43,20 @@ export default function MazeWorld({
     const startX = toTileCenterWorldX(worldSize, startPosition.x);
     const startZ = toTileCenterWorldZ(worldSize, startPosition.y);
 
-    const { geometry: groundGeometry, material: groundMaterial, mesh: ground } =
-      createGround(worldSize);
-    scene.add(ground);
-
-    const grid = createGrid(worldSize);
-    scene.add(grid);
-
-    const { hemiLight, dirLight } = createLights(lightIntensity);
-    scene.add(hemiLight);
-    scene.add(dirLight);
-
-    const wallMeshes = createWallMeshes(
-      boxes,
-      worldSize,
-      halfWorld,
-      scene,
-      wallTexture
-    );
-
     const enemyEntities = createEnemyEntities(enemies, worldSize, {
       halfWorld,
       min,
       max,
     });
 
-    const enemyVisuals = createEnemyVisuals(enemyEntities, scene);
+    const sceneSystem = createSceneSystem({
+      mount,
+      boxes,
+      enemies: enemyEntities,
+      worldSize,
+      halfWorld,
+      lightIntensity,
+    });
 
     const player: PlayerEntity = createPlayerState({
       startX,
@@ -100,32 +70,20 @@ export default function MazeWorld({
 
     const stopRuntime = startMazeWorldRuntime({
       mount,
-      scene,
-      camera,
-      renderer,
+      scene: sceneSystem.scene,
+      camera: sceneSystem.camera,
+      renderer: sceneSystem.renderer,
       player,
       enemies: enemyEntities,
-      enemyVisuals: enemyVisuals.records,
+      enemyVisuals: sceneSystem.enemyVisuals.records,
       bounds: { halfWorld, min, max },
       worldSize,
-      wallMeshes,
+      wallMeshes: sceneSystem.wallMeshes,
     });
 
     return () => {
       stopRuntime();
-
-      disposeGrid(grid);
-
-      groundGeometry.dispose();
-      groundMaterial.dispose();
-      disposeEnemyVisuals(enemyVisuals, scene);
-      disposeWallMeshes(wallMeshes);
-      wallTexture.dispose();
-      renderer.dispose();
-
-      if (renderer.domElement.parentNode === mount) {
-        mount.removeChild(renderer.domElement);
-      }
+      sceneSystem.dispose();
     };
   }, [
     boxes,

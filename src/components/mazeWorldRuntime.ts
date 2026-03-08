@@ -1,31 +1,56 @@
 import * as THREE from "three";
-import { syncCameraToEntity } from "./mazeWorldEntities";
-import { updateEnemies } from "./mazeWorldEnemies";
-import {
-  createPlayerMovementScratch,
-  updatePlayer,
-} from "./mazeWorldPlayer";
-import type { PlayerEntity } from "./mazeWorldEntities";
+import { createCollisionSystem } from "./collisionSystem";
+import { createDefaultDynamicGameObjects } from "./dynamicGameObjects";
 import type {
-  EnemyEntity,
-  EnemyVisualRecord,
-  WallMeshRecord,
-  WorldBounds,
-} from "./mazeWorldTypes";
+  DynamicGameObject,
+  RuntimeDisposeContext,
+  RuntimeInitContext,
+  MazeWorldRuntimeConfig,
+  RuntimeFrameContext,
+  RuntimeInputState,
+} from "./gameRuntimeTypes";
+import { createInputSystem } from "./inputSystem";
+import { createSceneRuntimeSystem } from "./sceneRuntimeSystem";
 
-const CONTROL_KEYS = new Set(["w", "a", "s", "d", "q", "e"]);
+const createRuntimeInitContext = (
+  config: MazeWorldRuntimeConfig,
+  collisionSystem: ReturnType<typeof createCollisionSystem>
+): RuntimeInitContext => ({
+  ...config,
+  collisionSystem,
+});
 
-type MazeWorldRuntimeParams = {
-  mount: HTMLDivElement;
-  scene: THREE.Scene;
-  camera: THREE.PerspectiveCamera;
-  renderer: THREE.WebGLRenderer;
-  player: PlayerEntity;
-  enemies: EnemyEntity[];
-  enemyVisuals: EnemyVisualRecord[];
-  bounds: WorldBounds;
-  worldSize: number;
-  wallMeshes: WallMeshRecord[];
+const createRuntimeDisposeContext = (
+  config: MazeWorldRuntimeConfig,
+  collisionSystem: ReturnType<typeof createCollisionSystem>
+): RuntimeDisposeContext => ({
+  ...config,
+  collisionSystem,
+});
+
+const createRuntimeFrameContext = (
+  config: MazeWorldRuntimeConfig,
+  dt: number,
+  collisionSystem: ReturnType<typeof createCollisionSystem>
+): RuntimeFrameContext => ({
+  player: config.player,
+  enemies: config.enemies,
+  enemyVisuals: config.enemyVisuals,
+  bounds: config.bounds,
+  worldSize: config.worldSize,
+  wallMeshes: config.wallMeshes,
+  dt,
+  collisionSystem,
+});
+
+const updateRuntimeFrame = (
+  frame: RuntimeFrameContext,
+  input: RuntimeInputState,
+  dynamicObjects: DynamicGameObject[]
+) => {
+  dynamicObjects.forEach((dynamicObject) => {
+    dynamicObject.update(frame, input);
+  });
 };
 
 export const startMazeWorldRuntime = ({
@@ -39,69 +64,101 @@ export const startMazeWorldRuntime = ({
   bounds,
   worldSize,
   wallMeshes,
-}: MazeWorldRuntimeParams) => {
-  syncCameraToEntity(camera, player);
-
-  const pressed = new Set<string>();
+}: MazeWorldRuntimeConfig) => {
+  const inputSystem = createInputSystem();
+  const collisionSystem = createCollisionSystem(wallMeshes);
+  const dynamicObjects = createDefaultDynamicGameObjects({ player });
+  const sceneRuntimeSystem = createSceneRuntimeSystem({
+    mount,
+    scene,
+    camera,
+    renderer,
+  });
   const clock = new THREE.Clock();
-  const scratch = createPlayerMovementScratch();
   let animationId = 0;
 
-  const onKeyDown = (event: KeyboardEvent) => {
-    const key = event.key.toLowerCase();
-    if (CONTROL_KEYS.has(key)) {
-      pressed.add(key);
-      event.preventDefault();
-    }
-  };
+  const initContext = createRuntimeInitContext(
+    {
+      mount,
+      scene,
+      camera,
+      renderer,
+      player,
+      enemies,
+      enemyVisuals,
+      bounds,
+      worldSize,
+      wallMeshes,
+    },
+    collisionSystem
+  );
 
-  const onKeyUp = (event: KeyboardEvent) => {
-    pressed.delete(event.key.toLowerCase());
-  };
+  dynamicObjects.forEach((dynamicObject) => {
+    dynamicObject.init(initContext);
+  });
+  sceneRuntimeSystem.init(initContext);
 
   const onResize = () => {
-    camera.aspect = mount.clientWidth / mount.clientHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(mount.clientWidth, mount.clientHeight);
+    sceneRuntimeSystem.resize();
   };
 
   const animate = () => {
     animationId = requestAnimationFrame(animate);
     const dt = clock.getDelta();
-
-    updatePlayer({
-      player,
-      pressed,
+    const frame = createRuntimeFrameContext(
+      {
+        player,
+        enemies,
+        enemyVisuals,
+        bounds,
+        worldSize,
+        wallMeshes,
+        mount,
+        scene,
+        camera,
+        renderer,
+      },
       dt,
-      bounds,
-      wallMeshes,
-      scratch,
-    });
+      collisionSystem
+    );
 
-    updateEnemies({
-      enemies,
-      enemyVisuals,
-      player,
-      dt,
-      bounds,
-      worldSize,
-      wallMeshes,
-    });
+    updateRuntimeFrame(
+      frame,
+      inputSystem.state,
+      dynamicObjects
+    );
 
-    syncCameraToEntity(camera, player);
-    renderer.render(scene, camera);
+    sceneRuntimeSystem.renderFrame(frame);
   };
 
-  window.addEventListener("keydown", onKeyDown);
-  window.addEventListener("keyup", onKeyUp);
   window.addEventListener("resize", onResize);
 
   animate();
 
   return () => {
     cancelAnimationFrame(animationId);
-    window.removeEventListener("keydown", onKeyDown);
-    window.removeEventListener("keyup", onKeyUp);
+    const disposeContext = createRuntimeDisposeContext(
+      {
+        mount,
+        scene,
+        camera,
+        renderer,
+        player,
+        enemies,
+        enemyVisuals,
+        bounds,
+        worldSize,
+        wallMeshes,
+      },
+      collisionSystem
+    );
+
+    [...dynamicObjects].reverse().forEach((dynamicObject) => {
+      dynamicObject.dispose(disposeContext);
+    });
+    sceneRuntimeSystem.dispose(disposeContext);
+
+    inputSystem.dispose();
     window.removeEventListener("resize", onResize);
   };
 };
